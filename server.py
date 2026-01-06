@@ -19,6 +19,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from auth_routes import auth_router, init_auth_db
+
 # Google GenAI SDK
 from google import genai
 from google.genai import types
@@ -76,6 +78,7 @@ def run_agent_call(fn):
 
 def _new_id(prefix="n") -> str:
     return f"{prefix}_{uuid.uuid4().hex[:8]}"
+
 
 # ==========================================
 # Prompt Logger & Analyzer
@@ -214,6 +217,7 @@ except Exception as e:
 # ==========================================
 
 app = FastAPI(title="BananaFlow - 电商智能图像工作台", version="3.3")
+init_auth_db()
 
 app.add_middleware(
     CORSMiddleware,
@@ -222,6 +226,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth_router)
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
