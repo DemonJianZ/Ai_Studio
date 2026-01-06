@@ -11,11 +11,14 @@ import re
 import requests
 import math
 import threading
+import sqlite3
+import hmac
+import hashlib
 from functools import lru_cache
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional, Tuple, Dict, Any, Set, Union, Literal
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -56,6 +59,14 @@ LOG_DIR = os.path.join(BASE_DIR, "logs")
 DEBUG_DIR = os.path.join(BASE_DIR, "debug_output")
 os.makedirs(LOG_DIR, exist_ok=True)
 os.makedirs(DEBUG_DIR, exist_ok=True)
+
+JWT_SECRET = os.getenv("JWT_SECRET", "bananaflow_dev_secret")
+JWT_ALG = os.getenv("JWT_ALG", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
+AUTH_DB_PATH = os.getenv("AUTH_DB_PATH", os.path.join(BASE_DIR, "auth.db"))
+db_lock = threading.Lock()
+db_conn = sqlite3.connect(AUTH_DB_PATH, check_same_thread=False)
+db_conn.row_factory = sqlite3.Row
 
 # ---- logging ----
 sys_logger = logging.getLogger("banana_flow_sys")
@@ -237,6 +248,17 @@ async def log_requests(request: Request, call_next):
 # ==========================================
 # DTOs
 # ==========================================
+
+class AuthRequest(BaseModel):
+    email: str
+    password: str
+
+
+class AuthResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: Dict[str, Any]
+
 
 class EditRequest(BaseModel):
     image: str
@@ -806,6 +828,44 @@ def deterministic_plan_or_patch(
 # ==========================================
 # Core APIs
 # ==========================================
+
+def build_user_payload(user: Dict[str, Any]):
+    data = serialize_user(user)
+    data["quota"] = get_quota(user["id"])
+    return data
+
+
+@app.post("/api/auth/register", response_model=AuthResponse)
+def register_user(req: AuthRequest):
+    email = (req.email or "").strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="请输入合法邮箱")
+    if not req.password or len(req.password) < 6:
+        raise HTTPException(status_code=400, detail="密码长度至少6位")
+    if get_user_by_email(email):
+        raise HTTPException(status_code=400, detail="用户已存在，请直接登录")
+    user = create_user(email, req.password)
+    token = create_access_token(user["id"])
+    return {"access_token": token, "token_type": "bearer", "user": build_user_payload(user)}
+
+
+@app.post("/api/auth/login", response_model=AuthResponse)
+def login_user(req: AuthRequest):
+    email = (req.email or "").strip().lower()
+    user = get_user_by_email(email)
+    if not user or not verify_password(req.password, user.get("password_hash")):
+        raise HTTPException(status_code=401, detail="邮箱或密码错误")
+    if user.get("status") != "active":
+        raise HTTPException(status_code=403, detail="账号不可用")
+    update_last_login(user["id"])
+    return {"access_token": create_access_token(user["id"]), "token_type": "bearer", "user": build_user_payload(user)}
+
+
+@app.get("/api/auth/me")
+def read_current_user(current_user=Depends(get_current_user)):
+    update_last_login(current_user["id"])
+    return {"user": build_user_payload(current_user)}
+
 
 @app.post("/api/text2img", response_model=Text2ImgResponse)
 def text_to_image(req: Text2ImgRequest, request: Request):
