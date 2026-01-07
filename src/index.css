@@ -1,71 +1,73 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-:root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
-
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
-}
-
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
-
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
+@layer base {
+  html, body, #root {
+    height: 100%;
   }
-  a:hover {
-    color: #747bff;
+
+  body {
+    margin: 0;
+    background: #020617; /* slate-950 */
+    color: rgba(255,255,255,0.92);
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
-  button {
-    background-color: #f9f9f9;
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+}
+
+@layer utilities {
+  /* subtle float for large panels */
+  @keyframes bf-float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-6px); }
+  }
+  .animate-bf-float {
+    animation: bf-float 7s ease-in-out infinite;
+  }
+
+  /* flowing dashed line */
+  @keyframes bf-dash {
+    0% { stroke-dashoffset: 0; }
+    100% { stroke-dashoffset: -160; }
+  }
+  .bf-connector {
+    stroke-dasharray: 7 10;
+    animation: bf-dash 4.6s linear infinite;
+    filter: drop-shadow(0 0 10px rgba(168,85,247,0.25));
+  }
+
+  /* moving dot along CSS motion path */
+  @keyframes bf-dot-move {
+    0% { offset-distance: 0%; opacity: 0.0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { offset-distance: 100%; opacity: 0.0; }
+  }
+  .bf-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.95), rgba(56,189,248,0.55), rgba(168,85,247,0.35));
+    box-shadow: 0 0 18px rgba(56,189,248,0.35);
+    offset-path: var(--bf-path);
+    offset-rotate: auto;
+    animation: bf-dot-move var(--bf-dur, 6.2s) linear infinite;
+    animation-delay: var(--bf-delay, 0s);
+  }
+
+  /* noise overlay (optional) */
+  .bf-noise {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.22'/%3E%3C/svg%3E");
+    background-size: 140px 140px;
+    mix-blend-mode: soft-light;
+    opacity: .22;
+    pointer-events: none;
   }
 }

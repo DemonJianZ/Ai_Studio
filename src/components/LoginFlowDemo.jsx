@@ -1,242 +1,297 @@
-import { motion } from "framer-motion";
-import { Cpu, Database, Download, Sparkles, Workflow } from "lucide-react";
+import React, { useMemo } from "react";
+import {
+  Sparkles,
+  Image as ImageIcon,
+  Video,
+  Upload,
+  FileText,
+  Wand2,
+  ArrowRight,
+} from "lucide-react";
 
-const nodePulseTransition = (delay = 0) => ({
-  duration: 1.1,
-  delay,
-  repeat: Infinity,
-  repeatDelay: 5.2,
-  ease: [0.22, 1, 0.36, 1],
-});
+function Node({
+  title,
+  subtitle,
+  icon: Icon,
+  tone = "purple",
+  x,
+  y,
+  // 调整：减小默认宽高，让整体视觉更精致，留白更多
+  w = "clamp(140px, 18vw, 180px)",
+  h = "clamp(68px, 9vh, 80px)",
+}) {
+  const toneMap = {
+    purple: "from-purple-400/40 via-purple-400/10 to-transparent",
+    cyan: "from-cyan-400/40 via-cyan-400/10 to-transparent",
+    emerald: "from-emerald-400/40 via-emerald-400/10 to-transparent",
+    amber: "from-amber-400/45 via-amber-400/10 to-transparent",
+  };
 
-const floatTransition = {
-  duration: 6.5,
-  repeat: Infinity,
-  repeatType: "mirror",
-  ease: "easeInOut",
-};
+  const desc =
+    subtitle === "Input"
+      ? "上传参考图或输入提示词，作为工作流起点。"
+      : subtitle === "Text → Image"
+      ? "根据 Prompt 生成商品主图 / 场景图。"
+      : subtitle === "Image → Image"
+      ? "保留主体，替换背景 / 风格迁移 / 细节修复。"
+      : subtitle === "Image → Video"
+      ? "以参考图为起点扩展为短视频片段。"
+      : subtitle === "Output"
+      ? "聚合结果，进入批量导出与发布。"
+      : "工作流节点";
 
-const nodes = [
-  {
-    id: "input",
-    title: "Dataset Intake",
-    subtitle: "Images & Prompts",
-    icon: Database,
-    delay: 0.15,
-    position: "left-6 top-10",
-    accent: "from-cyan-400/50 via-cyan-400/20 to-transparent",
-    body: (
-      <div className="text-[11px] text-slate-300/90">拖拽素材、文案与参考图像</div>
-    ),
-  },
-  {
-    id: "process",
-    title: "Processor",
-    subtitle: "Nodes x4",
-    icon: Cpu,
-    delay: 0.6,
-    position: "left-1/2 -translate-x-1/2 top-32",
-    accent: "from-purple-400/60 via-purple-400/20 to-transparent",
-    body: (
-      <div className="flex items-center gap-2 text-[11px] text-purple-100/90">
-        <div className="relative w-11 h-11">
-          <svg viewBox="0 0 44 44" className="w-full h-full">
-            <circle
-              cx="22"
-              cy="22"
-              r="18"
-              className="stroke-slate-700"
-              strokeWidth="4"
-              fill="none"
-            />
-            <motion.circle
-              cx="22"
-              cy="22"
-              r="18"
-              strokeWidth="4"
-              stroke="url(#processorGradient)"
-              fill="none"
-              strokeLinecap="round"
-              initial={{ pathLength: 0 }}
-              animate={{ pathLength: [0.15, 0.85, 0.15] }}
-              transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
-            />
-            <defs>
-              <linearGradient id="processorGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#c084fc" />
-                <stop offset="50%" stopColor="#38bdf8" />
-                <stop offset="100%" stopColor="#a855f7" />
-              </linearGradient>
-            </defs>
-          </svg>
-          <motion.div
-            className="absolute inset-1 rounded-full bg-slate-900/80 border border-purple-500/20 flex items-center justify-center text-[10px] text-purple-100"
-            animate={{ rotate: [0, 12, -8, 0] }}
-            transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
-          >
-            循环处理
-          </motion.div>
-        </div>
-        <div className="leading-tight">
-          <div className="font-semibold text-sm">迭代加速中</div>
-          <div className="text-[10px] text-slate-300">多节点并发 · QoS 平衡</div>
-        </div>
-      </div>
-    ),
-  },
-  {
-    id: "logic",
-    title: "Logic",
-    subtitle: "Routing",
-    icon: Workflow,
-    delay: 1.05,
-    position: "right-6 top-14",
-    accent: "from-emerald-400/60 via-emerald-400/25 to-transparent",
-    body: (
-      <div className="text-[11px] text-emerald-50/90">规则切换、路径分支与监控</div>
-    ),
-  },
-  {
-    id: "output",
-    title: "Output",
-    subtitle: "Delivery",
-    icon: Download,
-    delay: 1.5,
-    position: "right-10 bottom-8",
-    accent: "from-amber-400/70 via-amber-400/25 to-transparent",
-    body: (
-      <div className="flex items-center gap-2 text-[11px] text-amber-50/95">
-        <div className="w-2.5 h-2.5 rounded-full bg-amber-300 animate-ping" />
-        <div className="animate-pulse">下行中 · CDN 分发</div>
-      </div>
-    ),
-  },
-];
-
-const connectorConfig = [
-  { id: "path-1", d: "M132 86 C 170 90 188 94 214 82" },
-  { id: "path-2", d: "M214 126 C 228 148 240 178 232 214" },
-  { id: "path-3", d: "M140 182 C 156 190 172 200 212 210" },
-];
-
-function NodeCard({ title, subtitle, icon: Icon, accent, body, delay, position }) {
   return (
-    <motion.div
-      className={`group absolute ${position} w-60 rounded-2xl border border-slate-800/60 bg-slate-900/70 backdrop-blur-xl p-4 shadow-[0_20px_70px_-35px_rgba(0,0,0,0.6)] overflow-hidden`}
-      initial={{ opacity: 0, scale: 0.92, y: 16 }}
-      animate={{
-        opacity: [0, 1, 1],
-        scale: [0.92, 1, 1],
-        y: [16, 0, 0],
+    <div
+      className={[
+        "absolute z-20 rounded-xl border border-white/10 bg-slate-900/35 backdrop-blur-xl", // rounded-2xl -> rounded-xl
+        "shadow-[0_20px_60px_-40px_rgba(0,0,0,0.7)] overflow-hidden",
+        "transition-transform duration-500 hover:scale-[1.02] hover:border-white/20",
+      ].join(" ")}
+      style={{
+        left: `${x}%`,
+        top: `${y}%`,
+        width: w,
+        height: h,
+        transform: "translate(-50%, -50%)",
       }}
-      transition={nodePulseTransition(delay)}
     >
-      <motion.div
-        className="absolute inset-px rounded-2xl"
-        animate={{ opacity: [0.3, 0.6, 0.3] }}
-        transition={{ duration: 6.6, repeat: Infinity, ease: "easeInOut" }}
-        style={{
-          backgroundImage: `linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.06) 50%, transparent 100%)`,
-        }}
-      />
-      <div className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${accent} opacity-40 blur-2xl group-hover:opacity-60 transition`} />
-      <div className="relative flex items-center gap-3">
-        <div className="p-2 rounded-xl bg-slate-800/70 border border-slate-700/60 group-hover:border-white/40 group-hover:shadow-[0_0_25px_-12px_rgba(255,255,255,0.6)] transition">
-          <Icon className="w-4 h-4 text-white" />
+      <div className={`absolute inset-0 bg-gradient-to-br ${toneMap[tone]} opacity-55 blur-2xl`} />
+      <div className="absolute inset-0 bg-gradient-to-b from-white/6 via-transparent to-transparent" />
+
+      {/* 调整：减小 padding (p-4 -> p-3) 和 gap */}
+      <div className="relative h-full p-3 flex gap-2.5 items-center">
+        {/* 调整：减小图标容器和图标尺寸 */}
+        <div className="shrink-0 p-1.5 rounded-lg bg-slate-950/40 border border-white/10">
+          <Icon className="w-3.5 h-3.5 text-white" />
         </div>
-        <div className="leading-tight">
-          <div className="text-sm text-slate-300">{subtitle}</div>
-          <div className="font-semibold text-white">{title}</div>
+        <div className="min-w-0 flex flex-col justify-center">
+          {/* 调整：减小字号 */}
+          <div className="text-[9px] text-slate-400 font-semibold uppercase tracking-[0.18em] truncate">
+            {subtitle}
+          </div>
+          <div className="text-xs font-bold text-white truncate leading-tight my-0.5">{title}</div>
+          <div className="text-[9px] text-slate-400 leading-relaxed line-clamp-2 transform scale-95 origin-top-left">
+            {desc}
+          </div>
         </div>
       </div>
-      <div className="relative mt-3">{body}</div>
-    </motion.div>
+    </div>
+  );
+}
+
+function Dot({ pathId, delay = "0s" }) {
+  return (
+    <circle r="3.1" fill="white" opacity="0.95">
+      <animateMotion dur="5.2s" repeatCount="indefinite" begin={delay}>
+        <mpath href={`#${pathId}`} />
+      </animateMotion>
+    </circle>
   );
 }
 
 export default function LoginFlowDemo() {
+  const layout = useMemo(() => {
+    /**
+     * 调整后的布局策略：
+     * 1. X轴采用更均匀的分布 (16% -> 50% -> 84%)，留出更多呼吸感
+     * 2. Y轴保持垂直居中对称，Processors 在 20/50/80 分布，Inputs 穿插在 35/65
+     */
+    const nodes = {
+      // Column 1: Inputs
+      prompt:    { x: 16, y: 35 },
+      inputImg:  { x: 16, y: 65 },
+
+      // Column 2: Processors (Center Column)
+      t2i: { x: 50, y: 20 },
+      i2i: { x: 50, y: 50 },
+      i2v: { x: 50, y: 80 },
+
+      // Column 3: Output
+      output: { x: 84, y: 50 },
+    };
+
+    const map = (p) => ({
+      x: (p.x / 100) * 1000,
+      y: (p.y / 100) * 560,
+    });
+
+    const A = Object.fromEntries(Object.entries(nodes).map(([k, v]) => [k, map(v)]));
+
+    // 锚点偏移量
+    const leftOut = 125;  // 节点右侧出线
+    const midOut = 125;   // 中间节点出线
+    const inToMid = 125;  // 进入中间节点
+    const inToOut = 125;  // 进入输出节点
+
+    // 贝塞尔曲线控制点偏移 (控制线的弯曲程度)
+    const c1 = 180; 
+
+    const paths = [
+      {
+        id: "p_prompt_t2i",
+        d: `M ${A.prompt.x + leftOut} ${A.prompt.y}
+            C ${A.prompt.x + leftOut + c1} ${A.prompt.y},
+              ${A.t2i.x - inToMid - c1} ${A.t2i.y},
+              ${A.t2i.x - inToMid} ${A.t2i.y}`,
+      },
+      {
+        id: "p_in_i2i",
+        d: `M ${A.inputImg.x + leftOut} ${A.inputImg.y}
+            C ${A.inputImg.x + leftOut + c1} ${A.inputImg.y},
+              ${A.i2i.x - inToMid - c1} ${A.i2i.y},
+              ${A.i2i.x - inToMid} ${A.i2i.y}`,
+      },
+      {
+        id: "p_in_i2v",
+        d: `M ${A.inputImg.x + leftOut} ${A.inputImg.y}
+            C ${A.inputImg.x + leftOut + c1} ${A.inputImg.y},
+              ${A.i2v.x - inToMid - c1} ${A.i2v.y},
+              ${A.i2v.x - inToMid} ${A.i2v.y}`,
+      },
+      {
+        id: "p_t2i_out",
+        d: `M ${A.t2i.x + midOut} ${A.t2i.y}
+            C ${A.t2i.x + midOut + c1} ${A.t2i.y},
+              ${A.output.x - inToOut - c1} ${A.output.y},
+              ${A.output.x - inToOut} ${A.output.y}`,
+      },
+      {
+        id: "p_i2i_out",
+        d: `M ${A.i2i.x + midOut} ${A.i2i.y}
+            C ${A.i2i.x + midOut + c1} ${A.i2i.y},
+              ${A.output.x - inToOut - c1} ${A.output.y},
+              ${A.output.x - inToOut} ${A.output.y}`,
+      },
+      {
+        id: "p_i2v_out",
+        d: `M ${A.i2v.x + midOut} ${A.i2v.y}
+            C ${A.i2v.x + midOut + c1} ${A.i2v.y},
+              ${A.output.x - inToOut - c1} ${A.output.y},
+              ${A.output.x - inToOut} ${A.output.y}`,
+      },
+    ];
+
+    return { nodes, paths };
+  }, []);
+
   return (
-    <motion.div
-      className="relative h-full min-h-[420px] rounded-2xl border border-slate-800/60 bg-gradient-to-br from-slate-950 via-slate-950/80 to-slate-900/70 overflow-hidden shadow-2xl shadow-purple-900/40"
-      animate={{ y: [0, -3, 0] }}
-      transition={floatTransition}
-    >
+    <div className="relative h-full w-full rounded-3xl border border-white/10 overflow-hidden bg-gradient-to-br from-slate-950 via-slate-950/80 to-slate-900/60 shadow-2xl shadow-purple-900/25">
+      {/* ambient gradients */}
       <div
         className="absolute inset-0 opacity-60"
         style={{
           backgroundImage:
-            "radial-gradient(circle at 20% 30%, rgba(124,58,237,0.15), transparent 28%),radial-gradient(circle at 80% 20%, rgba(34,211,238,0.18), transparent 24%),radial-gradient(circle at 60% 80%, rgba(16,185,129,0.12), transparent 26%)",
+            "radial-gradient(circle at 18% 22%, rgba(124,58,237,0.22), transparent 42%)," +
+            "radial-gradient(circle at 82% 18%, rgba(34,211,238,0.18), transparent 40%)," +
+            "radial-gradient(circle at 60% 86%, rgba(16,185,129,0.14), transparent 44%)",
         }}
       />
+
+      {/* grid overlay */}
       <div
-        className="absolute inset-0 mix-blend-soft-light"
+        className="absolute inset-0 opacity-20"
         style={{
           backgroundImage:
-            "linear-gradient(transparent 95%, rgba(148,163,184,0.18) 96%), linear-gradient(90deg, transparent 95%, rgba(148,163,184,0.18) 96%)",
-          backgroundSize: "24px 24px, 24px 24px",
+            "linear-gradient(transparent 95%, rgba(255,255,255,0.10) 96%)," +
+            "linear-gradient(90deg, transparent 95%, rgba(255,255,255,0.10) 96%)",
+          backgroundSize: "28px 28px, 28px 28px",
         }}
       />
 
-      <div className="absolute top-4 right-4 z-20 flex items-center gap-2 text-xs text-slate-200/80">
-        <Sparkles className="w-4 h-4 text-purple-200" />
-        <span className="tracking-wide uppercase">AI Workflow in Motion</span>
+      <div className="absolute top-6 right-8 z-30 flex items-center gap-2 text-[10px] font-bold tracking-[0.22em] text-slate-400">
+        <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+        <span className="uppercase">Workflow Preview</span>
       </div>
 
-      <motion.div
-        className="relative h-full"
-        animate={{ y: [2, -2, 2] }}
-        transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
-      >
-        <div className="absolute inset-0 px-4 pt-8 pb-6">
-          <div className="relative h-full w-full rounded-2xl border border-slate-800/70 bg-slate-900/40 backdrop-blur-xl shadow-inner overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-white/3 via-transparent to-transparent pointer-events-none" />
+      {/* inner canvas */}
+      <div className="absolute inset-0 rounded-2xl border border-white/5 bg-slate-900/18 backdrop-blur-sm shadow-inner overflow-hidden">
+        {/* connectors under nodes */}
+        <svg viewBox="0 0 1000 560" className="absolute inset-0 w-full h-full z-10">
+          <defs>
+            <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.42" />
+              <stop offset="55%" stopColor="#a855f7" stopOpacity="0.52" />
+              <stop offset="100%" stopColor="#fbbf24" stopOpacity="0.40" />
+            </linearGradient>
 
-            <motion.svg
-              viewBox="0 0 320 240"
-              className="absolute inset-0 w-full h-full"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: [0, 1, 1] }}
-              transition={nodePulseTransition(0.3)}
-            >
-              {connectorConfig.map((conn, idx) => (
-                <g key={conn.id}>
-                  <motion.path
-                    id={conn.id}
-                    d={conn.d}
-                    fill="none"
-                    stroke="url(#lineGradient)"
-                    strokeWidth={2.6}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeDasharray="6 8"
-                    initial={{ pathLength: 0, strokeDashoffset: 1 }}
-                    animate={{ pathLength: [0, 1, 1], strokeDashoffset: [1, 0, 0] }}
-                    transition={{ duration: 1.4, delay: 0.6 + idx * 0.45, repeat: Infinity, repeatDelay: 4.5, ease: "easeInOut" }}
-                    className="drop-shadow-[0_0_12px_rgba(168,85,247,0.35)]"
-                  />
-                  <circle r={4} fill="url(#lineGradient)" className="shadow-[0_0_12px_rgba(96,165,250,0.4)]">
-                    <animateMotion dur="7s" repeatCount="indefinite" keyPoints="0;1" keyTimes="0;1" calcMode="linear" begin={`${0.6 + idx * 0.45}s`}>
-                      <mpath href={`#${conn.id}`} />
-                    </animateMotion>
-                  </circle>
-                </g>
-              ))}
+            <linearGradient id="flowGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="rgba(255,255,255,0)" />
+              <stop offset="45%" stopColor="rgba(255,255,255,0.65)" />
+              <stop offset="55%" stopColor="rgba(255,255,255,0.28)" />
+              <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+            </linearGradient>
+          </defs>
 
-              <defs>
-                <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#38bdf8" />
-                  <stop offset="50%" stopColor="#a855f7" />
-                  <stop offset="100%" stopColor="#fbbf24" />
-                </linearGradient>
-              </defs>
-            </motion.svg>
+          {layout.paths.map((p, idx) => (
+            <path
+              key={`base_${p.id}`}
+              id={p.id}
+              d={p.d}
+              fill="none"
+              stroke="url(#lineGrad)"
+              strokeWidth="2"
+              opacity="0.35"
+              className="bf-line"
+              style={{ animationDelay: `${idx * 0.25}s` }}
+            />
+          ))}
 
-            {nodes.map((node) => (
-              <NodeCard key={node.id} {...node} />
-            ))}
-          </div>
-        </div>
-      </motion.div>
-    </motion.div>
+          {layout.paths.map((p, idx) => (
+            <path
+              key={`flow_${p.id}`}
+              d={p.d}
+              fill="none"
+              stroke="url(#flowGrad)"
+              strokeWidth="4"
+              opacity="0.55"
+              className="bf-flow"
+              style={{ animationDelay: `${idx * 0.35}s` }}
+            />
+          ))}
+
+          <g style={{ filter: "drop-shadow(0 0 8px rgba(168,85,247,0.45))" }}>
+            <Dot pathId="p_prompt_t2i" delay="0s" />
+            <Dot pathId="p_in_i2i" delay="0.6s" />
+            <Dot pathId="p_in_i2v" delay="1.2s" />
+            <Dot pathId="p_t2i_out" delay="0.4s" />
+            <Dot pathId="p_i2i_out" delay="1.0s" />
+            <Dot pathId="p_i2v_out" delay="1.6s" />
+          </g>
+        </svg>
+
+        {/* nodes */}
+        <Node title="Prompt" subtitle="Input" icon={FileText} tone="cyan" x={layout.nodes.prompt.x} y={layout.nodes.prompt.y} />
+        <Node title="上传图片" subtitle="Input" icon={Upload} tone="cyan" x={layout.nodes.inputImg.x} y={layout.nodes.inputImg.y} />
+
+        <Node title="文生图" subtitle="Text → Image" icon={Wand2} tone="purple" x={layout.nodes.t2i.x} y={layout.nodes.t2i.y} />
+        <Node title="图生图" subtitle="Image → Image" icon={ImageIcon} tone="emerald" x={layout.nodes.i2i.x} y={layout.nodes.i2i.y} />
+        <Node title="图生视频" subtitle="Image → Video" icon={Video} tone="amber" x={layout.nodes.i2v.x} y={layout.nodes.i2v.y} />
+
+        <Node title="输出" subtitle="Output" icon={ArrowRight} tone="purple" x={layout.nodes.output.x} y={layout.nodes.output.y} />
+
+        {/* noise */}
+        <div className="absolute inset-0 pointer-events-none opacity-15 bf-noise z-0" />
+      </div>
+
+      <style>{`
+        .bf-line { animation: bfLine 3.6s ease-in-out infinite; }
+        @keyframes bfLine { 0%,100% { opacity: 0.28; } 50% { opacity: 0.48; } }
+
+        .bf-flow {
+          stroke-dasharray: 18 240;
+          stroke-dashoffset: 0;
+          animation: bfFlow 2.8s linear infinite;
+        }
+        @keyframes bfFlow {
+          0% { stroke-dashoffset: 0; opacity: 0.25; }
+          35% { opacity: 0.85; }
+          100% { stroke-dashoffset: -260; opacity: 0.25; }
+        }
+
+        .bf-noise {
+          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+      `}</style>
+    </div>
   );
 }

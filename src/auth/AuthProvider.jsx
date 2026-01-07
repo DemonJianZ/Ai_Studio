@@ -2,12 +2,13 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { API_BASE, TOKEN_KEY } from "../config";
 
 const AuthContext = createContext(null);
+const API_ROOT = (API_BASE || "").replace(/\/+$/, "");
 
 const buildUrl = (path) => {
-  if (!path) return API_BASE;
+  if (!path) return API_ROOT || "";
   if (path.startsWith("http")) return path;
-  if (path.startsWith("/")) return `${API_BASE}${path}`;
-  return `${API_BASE}/${path}`;
+  if (!API_ROOT) return path.startsWith("/") ? path : `/${path}`;
+  return path.startsWith("/") ? `${API_ROOT}${path}` : `${API_ROOT}/${path}`;
 };
 
 export function AuthProvider({ children }) {
@@ -16,35 +17,36 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const clearSession = useCallback((redirect = true) => {
+  const clearSession = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
     setToken(null);
     setUser(null);
-    if (redirect) {
-      window.location.href = "/login";
-    }
   }, []);
-
-  const handleUnauthorized = useCallback(() => {
-    clearSession(true);
-  }, [clearSession]);
 
   const apiFetch = useCallback(
     async (path, options = {}) => {
       const requestHeaders = new Headers(options.headers || {});
-      if (token) {
-        requestHeaders.set("Authorization", `Bearer ${token}`);
+      if (token) requestHeaders.set("Authorization", `Bearer ${token}`);
+
+      // ✅ 仅在“你确实传 JSON 字符串 body”时设置 Content-Type
+      const body = options.body;
+      const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
+      const isBlob = typeof Blob !== "undefined" && body instanceof Blob;
+
+      if (!requestHeaders.has("Content-Type") && body && !isFormData && !isBlob) {
+        if (typeof body === "string") requestHeaders.set("Content-Type", "application/json");
       }
-      const response = await fetch(buildUrl(path), {
-        ...options,
-        headers: requestHeaders,
-      });
-      if (response.status === 401) {
-        handleUnauthorized();
+
+      const resp = await fetch(buildUrl(path), { ...options, headers: requestHeaders });
+
+      // ✅ 全局 401：清 session，避免“过期 token 还在跑请求”
+      if (resp.status === 401) {
+        clearSession();
       }
-      return response;
+
+      return resp;
     },
-    [handleUnauthorized, token],
+    [token, clearSession],
   );
 
   const fetchProfile = useCallback(async () => {
@@ -52,15 +54,14 @@ export function AuthProvider({ children }) {
       setLoading(false);
       return;
     }
+
     try {
       const resp = await apiFetch("/api/auth/me");
-      if (!resp.ok) {
-        throw new Error("Unauthorized");
-      }
+      if (!resp.ok) throw new Error("Failed to fetch profile");
       const data = await resp.json();
-      setUser(data.user);
-    } catch (err) {
-      clearSession(false);
+      setUser(data.user || null);
+    } catch {
+      clearSession();
     } finally {
       setLoading(false);
     }
@@ -70,56 +71,57 @@ export function AuthProvider({ children }) {
     fetchProfile();
   }, [fetchProfile]);
 
-  const login = useCallback(
-    async (email, password) => {
-      setError(null);
-      const resp = await fetch(buildUrl("/api/auth/login"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok) {
-        throw new Error(data.detail || "登录失败");
-      }
-      localStorage.setItem(TOKEN_KEY, data.access_token);
-      setToken(data.access_token);
-      setUser(data.user);
-      return data;
-    },
-    [],
-  );
+  const login = useCallback(async (email, password) => {
+    setError(null);
 
-  const register = useCallback(
-    async (email, password) => {
-      setError(null);
-      const resp = await fetch(buildUrl("/api/auth/register"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok) {
-        throw new Error(data.detail || "注册失败");
-      }
-      localStorage.setItem(TOKEN_KEY, data.access_token);
-      setToken(data.access_token);
-      setUser(data.user);
-      return data;
-    },
-    [],
-  );
+    const resp = await fetch(buildUrl("/api/auth/login"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: (email || "").trim(), password }),
+    });
 
-  const logout = useCallback(
-    (redirect = true) => {
-      clearSession(redirect);
-    },
-    [clearSession],
-  );
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      const msg = data.detail || "登录失败";
+      setError(msg);
+      throw new Error(msg);
+    }
+
+    localStorage.setItem(TOKEN_KEY, data.access_token);
+    setToken(data.access_token);
+    setUser(data.user || null);
+    return data;
+  }, []);
+
+  const register = useCallback(async (email, password) => {
+    setError(null);
+
+    const resp = await fetch(buildUrl("/api/auth/register"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: (email || "").trim(), password }),
+    });
+
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      const msg = data.detail || "注册失败";
+      setError(msg);
+      throw new Error(msg);
+    }
+
+    localStorage.setItem(TOKEN_KEY, data.access_token);
+    setToken(data.access_token);
+    setUser(data.user || null);
+    return data;
+  }, []);
+
+  const logout = useCallback(() => {
+    clearSession();
+  }, [clearSession]);
 
   const value = useMemo(
     () => ({ user, token, loading, error, login, register, logout, apiFetch }),
-    [apiFetch, error, loading, login, logout, register, token, user],
+    [user, token, loading, error, login, register, logout, apiFetch],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

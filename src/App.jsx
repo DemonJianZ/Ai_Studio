@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from "./auth/AuthProvider";
 import Workbench from "./pages/Workbench";
 import AuthPage from "./pages/AuthPage";
 
+
 const LoadingScreen = () => (
   <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
     <div className="flex flex-col items-center gap-2">
