@@ -27,6 +27,11 @@ export function AuthProvider({ children }) {
     async (path, options = {}) => {
       const requestHeaders = new Headers(options.headers || {});
       if (token) requestHeaders.set("Authorization", `Bearer ${token}`);
+      if (user?.id) requestHeaders.set("X-User-Id", String(user.id));
+      if (user?.email_domain || user?.email) {
+        const tenant = user.email_domain || (user.email ? user.email.split("@")[1] : "");
+        if (tenant) requestHeaders.set("X-Tenant-Id", tenant);
+      }
 
       // ✅ 仅在“你确实传 JSON 字符串 body”时设置 Content-Type
       const body = options.body;
@@ -46,7 +51,7 @@ export function AuthProvider({ children }) {
 
       return resp;
     },
-    [token, clearSession],
+    [token, user, clearSession],
   );
 
   const fetchProfile = useCallback(async () => {

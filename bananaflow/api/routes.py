@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from google.genai import types
 
-from core.config import MODEL_GEMINI, MODEL_DOUBAO
+from core.config import MODEL_GEMINI, MODEL_DOUBAO, MODEL_AGENT
 from core.logging import sys_logger
 
 from schemas.api import (
@@ -37,6 +37,15 @@ prompt_logger = PromptLogger()
 analyzer = LogAnalyzer("logs/prompts.jsonl")
 
 
+def _extract_actor(request: Request) -> Dict[str, str]:
+    user_id = (request.headers.get("X-User-Id") or "").strip()
+    tenant_id = (request.headers.get("X-Tenant-Id") or "").strip()
+    return {
+        "user_id": user_id or "unknown",
+        "tenant_id": tenant_id or "unknown",
+    }
+
+
 # =========================================================
 # Core image/video endpoints
 # =========================================================
@@ -46,6 +55,7 @@ def text_to_image(req: Text2ImgRequest, request: Request):
     req_id = request.state.req_id
     selected_model = req.model or MODEL_GEMINI
     t0 = time.time()
+    actor = _extract_actor(request)
 
     try:
         img_bytes = None
@@ -94,12 +104,26 @@ def text_to_image(req: Text2ImgRequest, request: Request):
             {"model": selected_model, "temp": req.temperature, "size": req.size, "ar": req.aspect_ratio},
             {"file": "mem"},
             time.time() - t0,
+            user_id=actor["user_id"],
+            tenant_id=actor["tenant_id"],
         )
 
         return Text2ImgResponse(images=[bytes_to_data_url(img_bytes)])
 
     except Exception as e:
         sys_logger.error(f"[{req_id}] Text2Img Error: {e}")
+        prompt_logger.log(
+            req_id,
+            "text2img",
+            req.model_dump(),
+            req.prompt,
+            {"model": selected_model, "temp": req.temperature, "size": req.size, "ar": req.aspect_ratio},
+            {"file": "mem"},
+            time.time() - t0,
+            error=str(e),
+            user_id=actor["user_id"],
+            tenant_id=actor["tenant_id"],
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -107,6 +131,7 @@ def text_to_image(req: Text2ImgRequest, request: Request):
 def multi_image_generate(req: MultiImageRequest, request: Request):
     req_id = request.state.req_id
     t0 = time.time()
+    actor = _extract_actor(request)
 
     try:
         contents = [types.Part(text=req.prompt)]
@@ -143,11 +168,25 @@ def multi_image_generate(req: MultiImageRequest, request: Request):
             {"temperature": req.temperature, "ar": req.aspect_ratio},
             {"file": "mem"},
             time.time() - t0,
+            user_id=actor["user_id"],
+            tenant_id=actor["tenant_id"],
         )
         return MultiImageResponse(image=bytes_to_data_url(img_bytes))
 
     except Exception as e:
         sys_logger.error(f"[{req_id}] MultiImage Error: {e}")
+        prompt_logger.log(
+            req_id,
+            "multi_image_generate",
+            req.model_dump(),
+            req.prompt,
+            {"temperature": req.temperature, "ar": req.aspect_ratio},
+            {"file": "mem"},
+            time.time() - t0,
+            error=str(e),
+            user_id=actor["user_id"],
+            tenant_id=actor["tenant_id"],
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -155,6 +194,7 @@ def multi_image_generate(req: MultiImageRequest, request: Request):
 def edit_image(req: EditRequest, request: Request):
     req_id = request.state.req_id
     t0 = time.time()
+    actor = _extract_actor(request)
 
     final_ref_image = req.ref_image or req.background_image
     has_ref = bool(final_ref_image)
@@ -200,18 +240,33 @@ def edit_image(req: EditRequest, request: Request):
             {"model": selected_model, "has_ref": has_ref},
             {"file": "mem"},
             time.time() - t0,
+            user_id=actor["user_id"],
+            tenant_id=actor["tenant_id"],
         )
         return EditResponse(image=bytes_to_data_url(img_bytes))
 
     except Exception as e:
         sys_logger.error(f"[{req_id}] Edit Error ({req.mode}): {e}")
-        prompt_logger.log(req_id, req.mode, req.model_dump(), "ERROR", {}, {}, time.time() - t0, str(e))
+        prompt_logger.log(
+            req_id,
+            req.mode,
+            req.model_dump(),
+            "ERROR",
+            {"model": selected_model, "has_ref": has_ref},
+            {"file": "mem"},
+            time.time() - t0,
+            error=str(e),
+            user_id=actor["user_id"],
+            tenant_id=actor["tenant_id"],
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/api/img2video", response_model=Img2VideoResponse)
 def img_to_video(req: Img2VideoRequest, request: Request):
     req_id = request.state.req_id
+    t0 = time.time()
+    actor = _extract_actor(request)
     try:
         selected_model = req.model or "Doubao-Seedance-1.0-pro"
         print("--------选择的模型-------：", selected_model)
@@ -231,14 +286,61 @@ def img_to_video(req: Img2VideoRequest, request: Request):
             ratio=req.ratio,
             seed = req.seed,
         )
+        prompt_logger.log(
+            req_id,
+            "img2video",
+            req.model_dump(),
+            req.prompt or "",
+            {"model": selected_model, "duration": req.duration, "ratio": req.ratio},
+            {"file": "mem"},
+            time.time() - t0,
+            user_id=actor["user_id"],
+            tenant_id=actor["tenant_id"],
+        )
         return Img2VideoResponse(image=result)
 
     except TimeoutError as e:
+        prompt_logger.log(
+            req_id,
+            "img2video",
+            req.model_dump(),
+            req.prompt or "",
+            {"model": req.model, "duration": req.duration, "ratio": req.ratio},
+            {"file": "mem"},
+            time.time() - t0,
+            error=str(e),
+            user_id=actor["user_id"],
+            tenant_id=actor["tenant_id"],
+        )
         raise HTTPException(status_code=504, detail=str(e))
     except VideoGenError as e:
+        prompt_logger.log(
+            req_id,
+            "img2video",
+            req.model_dump(),
+            req.prompt or "",
+            {"model": req.model, "duration": req.duration, "ratio": req.ratio},
+            {"file": "mem"},
+            time.time() - t0,
+            error=str(e),
+            user_id=actor["user_id"],
+            tenant_id=actor["tenant_id"],
+        )
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         sys_logger.error(f"[{req_id}] VideoGen Error: {e}")
+        prompt_logger.log(
+            req_id,
+            "img2video",
+            req.model_dump(),
+            req.prompt or "",
+            {"model": req.model, "duration": req.duration, "ratio": req.ratio},
+            {"file": "mem"},
+            time.time() - t0,
+            error=str(e),
+            user_id=actor["user_id"],
+            tenant_id=actor["tenant_id"],
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -257,6 +359,8 @@ def agent_plan(req: AgentRequest, request: Request, response: Response) -> Dict[
     }
     """
     req_id = getattr(request.state, "req_id", "noid")
+    t0 = time.time()
+    actor = _extract_actor(request)
 
     # 多画布：优先 canvas_id，其次 thread_id，最后兜底
     canvas_id = (getattr(req, "canvas_id", None) or "").strip()
@@ -277,12 +381,35 @@ def agent_plan(req: AgentRequest, request: Request, response: Response) -> Dict[
         out = agent_plan_impl(req, request)
         if out is None:
             raise RuntimeError("agent_plan_impl returned None")
+        prompt_logger.log(
+            req_id,
+            "agent_plan",
+            req.model_dump(),
+            req.prompt or "",
+            {"model": MODEL_AGENT, "thread_id": thread_id},
+            {"patch_len": len(out.get("patch", [])) if isinstance(out, dict) else 0},
+            time.time() - t0,
+            user_id=actor["user_id"],
+            tenant_id=actor["tenant_id"],
+        )
         return out
 
     except HTTPException:
         raise
     except Exception as e:
         sys_logger.error(f"[{req_id}] /api/agent/plan error: {e}")
+        prompt_logger.log(
+            req_id,
+            "agent_plan",
+            req.model_dump(),
+            req.prompt or "",
+            {"model": MODEL_AGENT, "thread_id": thread_id},
+            {"patch_len": 0},
+            time.time() - t0,
+            error=str(e),
+            user_id=actor["user_id"],
+            tenant_id=actor["tenant_id"],
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -598,3 +725,18 @@ def get_stats():
 @router.get("/api/history")
 def get_history():
     return analyzer.get_history()
+
+
+@router.get("/api/analytics/requests")
+def get_recent_requests(limit: int = 30):
+    return analyzer.get_recent_requests(limit=limit)
+
+
+@router.get("/api/analytics/users")
+def get_user_stats(limit: int = 50):
+    return analyzer.get_user_stats(limit=limit)
+
+
+@router.get("/api/analytics/summary")
+def get_analytics_summary(days: int = 14):
+    return analyzer.get_summary(days=days)
