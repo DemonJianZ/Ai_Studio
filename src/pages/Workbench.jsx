@@ -1376,6 +1376,9 @@ const Workbench = () => {
   const [activeHistoryTab, setActiveHistoryTab] = useState("recent");
   const [apiHistory, setApiHistory] = useState([]);
   const [apiStats, setApiStats] = useState(null);
+  const [analyticsSummary, setAnalyticsSummary] = useState(null);
+  const [analyticsUsers, setAnalyticsUsers] = useState([]);
+  const [analyticsRequests, setAnalyticsRequests] = useState([]);
   const [runToast, setRunToast] = useState(null);
 
   const canvasRef = useRef(null);
@@ -2077,6 +2080,12 @@ const createConnectedImg2ImgBranch = useCallback(
       if (histResp.ok) setApiHistory(await histResp.json());
       const statsResp = await apiFetch(`/api/stats`);
       if (statsResp.ok) setApiStats(await statsResp.json());
+      const summaryResp = await apiFetch(`/api/analytics/summary`);
+      if (summaryResp.ok) setAnalyticsSummary(await summaryResp.json());
+      const usersResp = await apiFetch(`/api/analytics/users`);
+      if (usersResp.ok) setAnalyticsUsers(await usersResp.json());
+      const requestsResp = await apiFetch(`/api/analytics/requests?limit=30`);
+      if (requestsResp.ok) setAnalyticsRequests(await requestsResp.json());
     } catch (e) {
       console.error("Failed to fetch history/stats", e);
     }
@@ -2396,6 +2405,7 @@ const createConnectedImg2ImgBranch = useCallback(
           <div className="w-px h-4 bg-slate-700 mx-1"></div>
           <ToolIconBtn icon={Trash2} onClick={deleteSelection} title="Delete Selected" disabled={selectedNodeIds.size === 0 && selectedConnectionIds.size === 0} />
           <ToolIconBtn icon={Layout} onClick={autoLayout} title="Auto Layout" />
+          <ToolIconBtn icon={History} onClick={() => setShowHistoryPanel(true)} title="历史 / 统计" />
         </div>
 
 
@@ -2616,6 +2626,9 @@ const createConnectedImg2ImgBranch = useCallback(
                 <button onClick={() => setActiveHistoryTab("stats")} className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeHistoryTab === "stats" ? "border-purple-500 text-white" : "border-transparent text-slate-500"}`}>
                   数据趋势
                 </button>
+                <button onClick={() => setActiveHistoryTab("details")} className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeHistoryTab === "details" ? "border-purple-500 text-white" : "border-transparent text-slate-500"}`}>
+                  使用明细
+                </button>
               </div>
               <button onClick={() => setShowHistoryPanel(false)} className="text-slate-500 hover:text-white">
                 <X className="w-5 h-5" />
@@ -2641,8 +2654,76 @@ const createConnectedImg2ImgBranch = useCallback(
                     </div>
                   ))}
                 </div>
-              ) : (
+              ) : activeHistoryTab === "stats" ? (
                 <div className="space-y-6">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+                      <div className="text-[10px] uppercase tracking-wider text-slate-500">总调用</div>
+                      <div className="text-lg font-semibold text-white">{analyticsSummary?.total ?? "-"}</div>
+                    </div>
+                    <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+                      <div className="text-[10px] uppercase tracking-wider text-slate-500">成功率</div>
+                      <div className="text-lg font-semibold text-emerald-400">
+                        {analyticsSummary ? `${Math.round((analyticsSummary.success_rate || 0) * 100)}%` : "-"}
+                      </div>
+                    </div>
+                    <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+                      <div className="text-[10px] uppercase tracking-wider text-slate-500">错误率</div>
+                      <div className="text-lg font-semibold text-rose-400">
+                        {analyticsSummary ? `${Math.round((analyticsSummary.error_rate || 0) * 100)}%` : "-"}
+                      </div>
+                    </div>
+                    <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+                      <div className="text-[10px] uppercase tracking-wider text-slate-500">P95 耗时</div>
+                      <div className="text-lg font-semibold text-slate-200">
+                        {analyticsSummary ? `${analyticsSummary.p95_latency || 0}s` : "-"}
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">趋势（近14天）</h4>
+                    <div className="space-y-2">
+                      {(analyticsSummary?.trend || []).map((item) => (
+                        <div key={item.date} className="flex items-center gap-3">
+                          <div className="w-24 text-xs text-slate-400">{item.date}</div>
+                          <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
+                            <div className="h-full bg-emerald-500" style={{ width: `${Math.min((item.total / 20) * 100, 100)}%` }} />
+                          </div>
+                          <div className="text-[10px] text-slate-500 w-20">{item.total} 次</div>
+                          <div className="text-[10px] text-slate-500 w-20">错误 {Math.round((item.error_rate || 0) * 100)}%</div>
+                        </div>
+                      ))}
+                      {!analyticsSummary?.trend?.length && (
+                        <div className="text-xs text-slate-500">暂无趋势数据</div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Top 用户</h4>
+                      <div className="space-y-1">
+                        {(analyticsSummary?.top_users || []).map((item) => (
+                          <div key={item.user_id} className="flex items-center justify-between text-xs text-slate-300">
+                            <span className="truncate">{item.user_id}</span>
+                            <span className="text-slate-500">{item.total} 次</span>
+                          </div>
+                        ))}
+                        {!analyticsSummary?.top_users?.length && <div className="text-xs text-slate-500">暂无数据</div>}
+                      </div>
+                    </div>
+                    <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Top 模式</h4>
+                      <div className="space-y-1">
+                        {(analyticsSummary?.top_modes || []).map((item) => (
+                          <div key={item.mode} className="flex items-center justify-between text-xs text-slate-300">
+                            <span className="truncate">{TOOL_CARDS[item.mode]?.short || item.mode}</span>
+                            <span className="text-slate-500">{item.total} 次</span>
+                          </div>
+                        ))}
+                        {!analyticsSummary?.top_modes?.length && <div className="text-xs text-slate-500">暂无数据</div>}
+                      </div>
+                    </div>
+                  </div>
                   <div>
                     <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">热门模式分布</h4>
                     <div className="space-y-2">
@@ -2668,6 +2749,55 @@ const createConnectedImg2ImgBranch = useCallback(
                       ))}
                     </div>
                   </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">按用户统计</h4>
+                    <div className="space-y-2">
+                      {analyticsUsers.length === 0 && <div className="text-xs text-slate-500">暂无用户统计</div>}
+                      {analyticsUsers.map((item) => (
+                        <div key={item.user_id} className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+                          <div className="flex items-center justify-between text-xs text-slate-300">
+                            <span className="font-semibold">{item.user_id}</span>
+                            <span className="text-slate-500">{item.total} 次</span>
+                          </div>
+                          <div className="mt-2 grid grid-cols-3 gap-2 text-[10px] text-slate-400">
+                            <div>成功率 {Math.round((item.success_rate || 0) * 100)}%</div>
+                            <div>P50 {item.p50_latency || 0}s</div>
+                            <div>P95 {item.p95_latency || 0}s</div>
+                          </div>
+                          <div className="mt-2 text-[10px] text-slate-500">
+                            模式：{Object.entries(item.modes || {}).slice(0, 3).map(([mode, count]) => `${TOOL_CARDS[mode]?.short || mode} ${count}`).join(" / ") || "暂无"}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {analyticsRequests.length === 0 && <div className="text-center text-slate-500 py-8">暂无调用明细</div>}
+                  {analyticsRequests.map((item, i) => (
+                    <div key={`${item.time}-${i}`} className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-purple-400 font-bold uppercase">{TOOL_CARDS[item.mode]?.short || item.mode}</span>
+                          <span className="text-slate-500">{item.model || "默认模型"}</span>
+                          <span className={`text-[10px] ${item.success ? "text-emerald-400" : "text-rose-400"}`}>
+                            {item.success ? "成功" : "失败"}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-slate-500">{new Date(item.time).toLocaleString()}</div>
+                      </div>
+                      <div className="mt-2 text-xs text-slate-300 truncate font-mono">{item.prompt_summary || "(无 prompt)"}</div>
+                      <div className="mt-2 flex items-center gap-4 text-[10px] text-slate-500">
+                        <span>耗时 {item.latency_sec || 0}s</span>
+                        <span>用户 {item.user_id || "unknown"}</span>
+                        <span>Tenant {item.tenant_id || "unknown"}</span>
+                      </div>
+                      {!item.success && item.error && (
+                        <div className="mt-2 text-[10px] text-rose-400 truncate">错误：{item.error}</div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
